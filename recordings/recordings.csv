@@ -33,3 +33,6 @@ safety_2026-06-30-14-17-18,/home/ml/webcam_recorder/recordings/safety_2026-06-30
 extcal,/home/ml/webcam_recorder/recordings/extcal.mp4,2026-07-01 15:52:26,2026-07-01 16:08:57,988.9,5431967039,5432.0,request
 flight_2026-07-01_17-44-32,/home/ml/webcam_recorder/recordings/flight_2026-07-01_17-44-32.mp4,2026-07-01 17:44:32,2026-07-01 17:45:27,55.0,289559143,289.6,request
 flight_2026-07-01_17-46-16,/home/ml/webcam_recorder/recordings/flight_2026-07-01_17-46-16.mp4,2026-07-01 17:46:16,2026-07-01 17:46:54,38.4,200624178,200.6,request
+flight_2026-07-01_22-59-50,/home/ml/webcam_recorder/recordings/flight_2026-07-01_22-59-50/flight_2026-07-01_22-59-50.mp4,2026-07-01 22:59:50,2026-07-01 23:00:33,43.2,236888134,236.9,request
+flight_2026-07-01_23-16-11,/home/ml/webcam_recorder/recordings/flight_2026-07-01_23-16-11/flight_2026-07-01_23-16-11.mp4,2026-07-01 23:16:11,2026-07-01 23:16:57,46.3,248870570,248.9,request
+flight_2026-07-01_23-21-17,/home/ml/webcam_recorder/recordings/flight_2026-07-01_23-21-17/flight_2026-07-01_23-21-17.mp4,2026-07-01 23:21:17,2026-07-01 23:22:47,90.3,484006873,484.0,request

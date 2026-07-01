@@ -12,4 +12,5 @@ if [ -z "$OVERLAY_IN_TERM" ] && ! [ -t 1 ]; then
 fi
 DIR="$(dirname "$(readlink -f "$0")")"
 REPO=/home/ml/webcam_recorder
+source /opt/ros/noetic/setup.bash   # calib_click reads the bag (needs rosbag on PYTHONPATH)
 python3 "$REPO/calib_click.py" --dir "$DIR"
