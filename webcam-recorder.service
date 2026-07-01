@@ -1,0 +1,43 @@
+[Unit]
+Description=Webcam recorder ROS node (camera owner: live preview + on-demand recording)
+# Needs the network to reach the ROS master (50.36); owns /dev/video0.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ml
+# /dev/video0 is root:video. The service runs outside any login session, so the
+# logind uaccess ACL does NOT apply — grant the camera group directly here.
+SupplementaryGroups=video
+# ROS can't be "sourced" by systemd directly: start via a login shell that
+# sources setup.bash, then exec the node so it stays the main PID.
+ExecStart=/bin/bash -lc 'source /opt/ros/noetic/setup.bash && exec /usr/bin/python3 /home/ml/webcam_recorder/recorder_node.py'
+Restart=always
+RestartSec=10
+
+# --- ROS: master lives on 50.36; advertise this PC (ml) as 50.12 ---
+Environment=ROS_MASTER_URI=http://192.168.50.36:11311
+Environment=ROS_IP=192.168.50.12
+
+# --- calibrated camera settings (applied to /dev/video0 at each recording) ---
+Environment=CAM_FOCUS=5
+Environment=CAM_AUTO_EXPOSURE=1
+Environment=CAM_EXPOSURE=160
+Environment=CAM_AUTO_WB=0
+Environment=CAM_WB_TEMP=4500
+Environment=CAM_BRIGHTNESS=30
+
+# --- full sensor resolution, best quality (recording); preview is downscaled ---
+Environment=CAM_SIZE=2592x1944
+Environment=CAM_CRF=16
+Environment=CAM_FPS=30
+
+# --- live ROS preview (CompressedImage jpeg) ---
+Environment=CAM_IMG_TOPIC=/recorder/image_raw
+Environment=CAM_PREVIEW_W=640
+# 0 = camera native rate (~19fps at 5MP, ~30fps at 1080p). Set a number to cap.
+Environment=CAM_PREVIEW_FPS=0
+
+[Install]
+WantedBy=multi-user.target

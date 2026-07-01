@@ -1,0 +1,21 @@
+# Large recording media — keep configs/calibration/scripts, not the data
+*.mp4
+*.mkv
+*.bag
+*.ffmpeg.log
+
+# Generated overlay frames
+recordings/**/overlay_poc/
+recordings/**/overlay_full_poc/
+recordings/**/overlay_rviz_raw.mkv
+
+# Python
+__pycache__/
+*.pyc
+
+# Keep these small, useful artifacts (negated so they ARE tracked):
+!recordings/**/rviz.rviz
+!webcam_extrinsics.json
+!webcam_extrinsics_clicked.json
+!recordings/**/clicks_*.json
+!recordings/recordings.csv
