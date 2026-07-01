@@ -1,0 +1,12 @@
+# Auto-restart the webcam recorder service when the ABKO APC930 webcam is
+# (re)plugged, so a mid-session USB unplug doesn't leave the node stuck without a
+# camera. The node from before the unplug can't re-grab the device on its own.
+#
+# Install:
+#   sudo cp 99-webcam-recorder.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#
+# ID 1bcf:5034 = ABKO APC930 (from `udevadm info -a -n /dev/video0`).
+# systemd-run --no-block: don't block udev; sleep lets /dev/video0 settle before
+# the service reopens it.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1bcf", ATTR{idProduct}=="5034", RUN+="/usr/bin/systemd-run --no-block /bin/sh -c 'sleep 3; systemctl restart webcam-recorder.service'"
