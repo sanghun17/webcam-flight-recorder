@@ -4,10 +4,12 @@
 *.bag
 *.ffmpeg.log
 
-# Generated overlay frames
+# Generated overlay frames / per-folder rviz configs
 recordings/**/overlay_poc/
 recordings/**/overlay_full_poc/
 recordings/**/overlay_rviz_raw.mkv
+recordings/**/.rviz_overlay.rviz
+recordings/**/.rviz_capture.rviz
 
 # Python
 __pycache__/

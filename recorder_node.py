@@ -28,11 +28,33 @@ v4l2-ctl must be installed.
 """
 import csv
 import os
+import shutil
 import signal
+import stat
 import subprocess
 import threading
 import time
 from datetime import datetime
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_BUTTONS_SRC = os.path.join(_HERE, "rviz_overlay", "folder_buttons")
+
+
+def _install_folder_buttons(recdir):
+    """Drop the overlay double-click buttons into a new recording folder so, once
+    the remote sends the bag/extrinsics/rviz, the user can view/recalibrate/render
+    with a double-click. Best-effort."""
+    if not os.path.isdir(_BUTTONS_SRC):
+        return
+    for fn in sorted(os.listdir(_BUTTONS_SRC)):
+        if not fn.endswith(".sh"):
+            continue
+        dst = os.path.join(recdir, fn)
+        try:
+            shutil.copyfile(os.path.join(_BUTTONS_SRC, fn), dst)
+            os.chmod(dst, os.stat(dst).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        except OSError as e:
+            rospy.logwarn("could not install overlay button %s: %s", fn, e)
 
 import rospy
 from sensor_msgs.msg import CompressedImage
@@ -227,6 +249,7 @@ class CameraNode:
         base = _unique_label(label)
         recdir = os.path.join(OUTDIR, base)
         os.makedirs(recdir, exist_ok=True)
+        _install_folder_buttons(recdir)
         path = os.path.join(recdir, base + _REC_EXT)
         logpath = os.path.join(recdir, base + ".ffmpeg.log")
         _apply_camera_controls()

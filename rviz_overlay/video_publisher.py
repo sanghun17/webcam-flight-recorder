@@ -16,6 +16,7 @@ Run via overlay.launch (needs use_sim_time=true).
 """
 import json
 import os
+import sys
 
 import cv2
 import numpy as np
@@ -23,22 +24,29 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import CameraInfo, Image
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-PROJ = os.path.dirname(HERE)
-REC = os.path.join(PROJ, "recordings", "safety_2026-06-30-14-17-18")
-VIDEO = os.path.join(REC, "safety_2026-06-30-14-17-18.mp4")
-EXTR = os.path.join(PROJ, "webcam_extrinsics_clicked.json")
-VIDEO_START_EPOCH = 1782829038.0     # see overlay_odom.py
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import overlay_lib
 
 
 class VideoPublisher:
     def __init__(self):
-        E = json.load(open(EXTR))
+        # recording folder comes from $REC_DIR (set by the launcher)
+        recdir = os.environ.get("REC_DIR") or rospy.get_param("~rec_dir", "")
+        info = overlay_lib.find_recording(recdir)
+        if not info["video"] or not info["extr"]:
+            rospy.logerr("REC_DIR %s missing video/extrinsics", recdir)
+            raise SystemExit(1)
+        self.video_path = info["video"]
+        self.start_epoch = info["start_epoch"]
+        if self.start_epoch is None:
+            rospy.logerr("no start time in recordings.csv for %s", info["name"])
+            raise SystemExit(1)
+        E = json.load(open(info["extr"]))
         self.K = np.array(E["K"], np.float64)
         self.D = np.array(E["dist"], np.float64)
         self.W, self.H = int(E["width"]), int(E["height"])
-        self.offset = E.get("time_offset_sec", 0.0)
-        self.frame_id = rospy.get_param("~frame_id", "webcam_optical")
+        self.offset = info["time_offset"]
+        self.frame_id = rospy.get_param("~frame_id", overlay_lib.OPTICAL_FRAME)
 
         # Full 5MP raw is ~450MB/s @30Hz — too heavy for rviz to texture at rate,
         # so the image lags the markers during fast motion. Downscale (K scales
@@ -49,7 +57,7 @@ class VideoPublisher:
         self.newK = self.K.copy()
         self.newK[:2, :] *= self.scale        # fx,fy,cx,cy scale; bottom row stays
 
-        self.cap = cv2.VideoCapture(VIDEO)
+        self.cap = cv2.VideoCapture(self.video_path)
         self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
         self.nframes = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         # undistort+resize look-up maps (dst = newK, size = scaled); once, for speed
@@ -89,7 +97,7 @@ class VideoPublisher:
         now = rospy.Time.now().to_sec()
         if now <= 0:
             return                       # waiting for first /clock
-        idx = int(round((now - VIDEO_START_EPOCH - self.offset) * self.fps))
+        idx = int(round((now - self.start_epoch - self.offset) * self.fps))
         if idx < 0 or idx >= self.nframes or idx == self.cur:
             return
         img = self._read(idx)
