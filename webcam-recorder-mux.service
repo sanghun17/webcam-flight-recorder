@@ -1,0 +1,22 @@
+[Unit]
+# Fan-out node: re-advertises the single /recorder/start|stop that the onboard
+# flight-safety recorder calls, forwarding each to every per-camera instance
+# (recorder_cam1, recorder_cam2, ...). Keeps the onboard side unchanged.
+Description=Webcam recorder fan-out (/recorder/start|stop -> cam1 + cam2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ml
+# Owns no camera device — only forwards ROS service calls.
+ExecStart=/bin/bash -lc 'source /opt/ros/noetic/setup.bash && exec /usr/bin/python3 /home/ml/webcam_recorder/recorder_mux.py'
+Restart=always
+RestartSec=10
+
+# --- ROS: master lives on 50.36; advertise this PC (ml) as 50.12 ---
+Environment=ROS_MASTER_URI=http://192.168.50.36:11311
+Environment=ROS_IP=192.168.50.12
+
+[Install]
+WantedBy=multi-user.target

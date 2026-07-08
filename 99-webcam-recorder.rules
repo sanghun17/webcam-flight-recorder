@@ -1,12 +1,22 @@
-# Auto-restart the webcam recorder service when the ABKO APC930 webcam is
-# (re)plugged, so a mid-session USB unplug doesn't leave the node stuck without a
-# camera. The node from before the unplug can't re-grab the device on its own.
+# Two ABKO APC930 units (both VID:PID 1bcf:5034) that BOTH report no USB serial,
+# so by-id collides and can't tell them apart. They are different hardware
+# revisions, so identify by bcdDevice instead — port- AND serial-independent:
+#   cam1 = rev 400d (autofocus + manual focus)
+#   cam2 = rev 1008 (autofocus + manual focus)
+# (an earlier cam2 unit was rev 1105 = fixed-focus, since swapped out.)
+# NOTE: this assumes the two units keep DISTINCT revisions. If you ever run two
+# same-revision units, fall back to by-path (physical port): see /dev/v4l/by-path/.
 #
 # Install:
 #   sudo cp 99-webcam-recorder.rules /etc/udev/rules.d/
-#   sudo udevadm control --reload-rules
+#   sudo udevadm control --reload-rules && sudo udevadm trigger --subsystem-match=video4linux
 #
-# ID 1bcf:5034 = ABKO APC930 (from `udevadm info -a -n /dev/video0`).
-# systemd-run --no-block: don't block udev; sleep lets /dev/video0 settle before
-# the service reopens it.
-ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1bcf", ATTR{idProduct}=="5034", RUN+="/usr/bin/systemd-run --no-block /bin/sh -c 'sleep 3; systemctl restart webcam-recorder.service'"
+# 1) Stable capture-node symlinks (index 0 = capture, 1 = metadata) for CAM_DEVICE.
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1bcf", ATTRS{idProduct}=="5034", ATTRS{bcdDevice}=="400d", ATTR{index}=="0", SYMLINK+="webcam_cam1"
+SUBSYSTEM=="video4linux", ATTRS{idVendor}=="1bcf", ATTRS{idProduct}=="5034", ATTRS{bcdDevice}=="1008", ATTR{index}=="0", SYMLINK+="webcam_cam2"
+#
+# 2) Auto-restart only the matching instance when its camera is (re)plugged, so a
+#    mid-session unplug doesn't leave a node stuck and never disturbs the other cam.
+#    systemd-run --no-block: don't block udev; sleep lets the node settle first.
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1bcf", ATTR{idProduct}=="5034", ATTR{bcdDevice}=="400d", RUN+="/usr/bin/systemd-run --no-block /bin/sh -c 'sleep 3; systemctl restart webcam-recorder@cam1.service'"
+ACTION=="add", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1bcf", ATTR{idProduct}=="5034", ATTR{bcdDevice}=="1008", RUN+="/usr/bin/systemd-run --no-block /bin/sh -c 'sleep 3; systemctl restart webcam-recorder@cam2.service'"

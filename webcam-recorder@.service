@@ -1,0 +1,55 @@
+[Unit]
+# Per-camera instance of the recorder node. Instantiate as:
+#   webcam-recorder@cam1.service   webcam-recorder@cam2.service
+# Each instance owns exactly one APC930 (selected by CAM_DEVICE in its env file),
+# publishes a live ROS preview, and records on <ns>/start .. <ns>/stop.
+Description=Webcam recorder ROS node (%i) — live preview + on-demand recording
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ml
+# /dev/video* is root:video; the service runs outside a login session so grant
+# the camera group directly.
+SupplementaryGroups=video
+# ROS can't be sourced by systemd directly: start via a login shell that sources
+# setup.bash, then exec the node so it stays the main PID.
+ExecStart=/bin/bash -lc 'source /opt/ros/noetic/setup.bash && exec /usr/bin/python3 /home/ml/webcam_recorder/recorder_node.py'
+Restart=always
+RestartSec=10
+
+# --- ROS: master lives on 50.36; advertise this PC (ml) as 50.12 ---
+Environment=ROS_MASTER_URI=http://192.168.50.36:11311
+Environment=ROS_IP=192.168.50.12
+
+# --- calibrated camera settings (same model → shared defaults for both units) ---
+# A camera needing its own value can override any of these in its env/<inst>.env
+# (the EnvironmentFile below is read last, so per-camera keys win).
+# focus + exposure + WB all LOCKED for stable recording (no hunting/pumping/drift).
+# exposure=300: in MANUAL exposure this cam has NO gain/ISO control, so brightness
+# comes only from exposure time (auto mode boosts gain internally -> looked bright at
+# short exp, but that gain is gone once locked). 300 gives a usable brightness; it's a
+# longish exposure though, so watch for motion blur on the fast drone and drop it (or
+# add light) if the drone smears. WB is FIXED per-camera (auto-WB read cam2 blue): the
+# two sensor revs need DIFFERENT temps for the SAME color -> env/cam1.env(4300)/cam2.env(5000).
+# Residual: cam1 reads a bit green — no UVC control fixes green (scene-vs-sensor TBD).
+Environment=CAM_FOCUS=5
+Environment=CAM_AUTO_EXPOSURE=1
+Environment=CAM_EXPOSURE=300
+Environment=CAM_AUTO_WB=0
+Environment=CAM_BRIGHTNESS=0
+
+# --- full sensor resolution, best quality (recording); preview is downscaled ---
+Environment=CAM_SIZE=2592x1944
+Environment=CAM_CRF=16
+Environment=CAM_FPS=30
+Environment=CAM_PREVIEW_W=640
+Environment=CAM_PREVIEW_FPS=0
+
+# --- per-camera identity: device (by-id), node/topic namespace, filename tag ---
+# Read LAST so a camera can override any common default above.
+EnvironmentFile=/home/ml/webcam_recorder/env/%i.env
+
+[Install]
+WantedBy=multi-user.target

@@ -69,6 +69,9 @@ OUTDIR     = os.environ.get("CAM_OUTDIR", os.path.join(os.path.dirname(os.path.a
 PRESET     = os.environ.get("CAM_PRESET", "veryfast")   # x264 speed/size tradeoff
 CRF        = os.environ.get("CAM_CRF", "20")            # x264 quality: lower=sharper/bigger
 CODEC      = os.environ.get("CAM_CODEC", "h264").lower()  # h264 (mp4) | ffv1 (lossless, mkv)
+NODE_NAME  = os.environ.get("CAM_NODE_NAME", "recorder")  # ROS node name = service/topic namespace (one per camera)
+TAG        = os.environ.get("CAM_TAG", "")                # per-camera recording suffix: flight_<ts>_<TAG> (e.g. cam1)
+STEM_PARAM = os.environ.get("CAM_SESSION_STEM_PARAM", "/recorder/session_stem")  # shared name pinned by recorder_mux
 # ---- live preview (ROS CompressedImage) ----
 IMG_TOPIC    = os.environ.get("CAM_IMG_TOPIC", "/recorder/image_raw")  # "/compressed" is appended
 FRAME_ID     = os.environ.get("CAM_FRAME_ID", "camera")
@@ -124,19 +127,6 @@ def _free_mb(path):
         return None
 
 
-def _unique_label(label):
-    """label, or label_2 / label_3 ... if a recording folder with that name exists.
-
-    Each recording lives in its own OUTDIR/<label>/ directory (holding the
-    original recording + its ffmpeg log), so uniqueness is checked per-folder."""
-    if not os.path.exists(os.path.join(OUTDIR, label)):
-        return label
-    n = 2
-    while os.path.exists(os.path.join(OUTDIR, f"{label}_{n}")):
-        n += 1
-    return f"{label}_{n}"
-
-
 def _append_manifest(row):
     new = not os.path.exists(MANIFEST)
     try:
@@ -151,8 +141,16 @@ def _append_manifest(row):
 
 def _apply_camera_controls():
     """Pin focus/exposure/wb via v4l2-ctl so the image stops hunting. Auto modes
-    must be disabled in a separate call BEFORE their absolute values, or this
-    driver ignores the values. Best-effort: failures are logged, never fatal."""
+    must be disabled BEFORE their absolute values, or this driver ignores the
+    values — so 'first' (auto toggles) is applied before 'rest' (absolutes).
+
+    Each control is set in its OWN v4l2-ctl call: the two APC930 hardware
+    revisions expose different control sets (rev 1105 is fixed-focus with no
+    focus_* controls), and a comma-joined call fails as a whole on the first
+    unknown control — silently dropping exposure/wb/brightness too, leaving that
+    camera fully auto and looking nothing like the other. Per-control calls keep
+    both cameras matched on every control that exists. Best-effort: an unknown
+    control is skipped with a log line, never fatal."""
     first = [f"focus_automatic_continuous={FOCUS_AUTO}"]
     if AUTO_EXPOSURE != "": first.append(f"auto_exposure={AUTO_EXPOSURE}")
     if AUTO_WB != "":       first.append(f"white_balance_automatic={AUTO_WB}")
@@ -163,20 +161,30 @@ def _apply_camera_controls():
     if BRIGHTNESS != "":   rest.append(f"brightness={BRIGHTNESS}")
     if POWER_FREQ != "":   rest.append(f"power_line_frequency={POWER_FREQ}")
     if SHARPNESS != "":    rest.append(f"sharpness={SHARPNESS}")
-    if EXTRA_CTRLS:        rest.append(EXTRA_CTRLS)
-    for group in (first, rest):
-        if not group:
-            continue
-        try:
-            subprocess.run(["v4l2-ctl", "-d", DEVICE, "-c", ",".join(group)],
-                           check=True, capture_output=True, text=True, timeout=5)
-        except FileNotFoundError:
-            rospy.logwarn("v4l2-ctl not installed — camera controls skipped")
-            return
-        except subprocess.CalledProcessError as e:
-            rospy.logwarn("camera control failed (%s): %s", ",".join(group), e.stderr.strip())
-        except subprocess.TimeoutExpired:
-            rospy.logwarn("v4l2-ctl timed out applying camera controls")
+    if EXTRA_CTRLS:        rest += [c.strip() for c in EXTRA_CTRLS.split(",") if c.strip()]
+    for ctrl in first + rest:   # order preserved: auto toggles, then absolutes
+        for attempt in range(4):   # device can be briefly busy right after a (re)start
+            try:
+                subprocess.run(["v4l2-ctl", "-d", DEVICE, "-c", ctrl],
+                               check=True, capture_output=True, text=True, timeout=5)
+                break
+            except FileNotFoundError:
+                rospy.logwarn("v4l2-ctl not installed — camera controls skipped")
+                return
+            except subprocess.CalledProcessError as e:
+                err = e.stderr.strip()
+                # "Cannot open device ... busy" during a restart race -> retry so we
+                # don't leave e.g. exposure frozen at its auto value. A genuinely
+                # unknown control (fixed-focus unit rejecting focus_*) won't recover
+                # -> skip immediately, keep applying the rest.
+                if "annot open" in err and attempt < 3:
+                    time.sleep(0.5)
+                    continue
+                rospy.logwarn("camera control skipped (%s): %s", ctrl, err)
+                break
+            except subprocess.TimeoutExpired:
+                rospy.logwarn("v4l2-ctl timed out on %s", ctrl)
+                break
 
 
 def _input_args():
@@ -241,13 +249,20 @@ class CameraNode:
             return
         self._proc, self._recording = proc, False
         self._start_reader(proc)
+        self._reapply_controls_after_stream()   # exposure gets reset at stream start
         pv_rate = "native" if PREVIEW_FPS in ("", "0") else PREVIEW_FPS + "fps"
         rospy.loginfo("preview running (%s @ %sfps, %s px wide, %s to ROS)",
                       VIDEO_SIZE, FRAMERATE, PREVIEW_W, pv_rate)
 
-    def _launch_recording_unlocked(self, label):
-        base = _unique_label(label)
-        recdir = os.path.join(OUTDIR, base)
+    def _launch_recording_unlocked(self, stem, tag, label):
+        # Nested layout: recordings/<stem>/<tag>/ so both cameras of one flight share
+        # the <stem> parent (the shared bag lands at <stem>/). Standalone (no tag)
+        # falls back to the flat recordings/<stem>/.
+        recdir = os.path.join(OUTDIR, stem, tag) if tag else os.path.join(OUTDIR, label)
+        base = label   # mp4 basename + manifest name; suffixed only on a real collision
+        n = 2
+        while os.path.exists(os.path.join(recdir, base + _REC_EXT)):
+            base = f"{label}_{n}"; n += 1
         os.makedirs(recdir, exist_ok=True)
         _install_folder_buttons(recdir)
         path = os.path.join(recdir, base + _REC_EXT)
@@ -268,6 +283,7 @@ class CameraNode:
         self._path, self._name = path, base
         self._started_at, self._started_dt = time.time(), datetime.now()
         self._start_reader(proc)
+        self._reapply_controls_after_stream()   # exposure gets reset at stream start
 
         time.sleep(1.0)
         if proc.poll() is not None:  # died immediately -> bad args/device
@@ -282,6 +298,17 @@ class CameraNode:
         note = "" if base == label else f" (requested '{label}', auto-suffixed)"
         rospy.loginfo("START name=%s%s file=%s", base, note, path)
         return True, "recording started"
+
+    def _reapply_controls_after_stream(self):
+        """exposure_time_absolute gets reset to a default (~78) when a NEW
+        streaming session starts on the rev-1008 unit — wiping the value _apply
+        set just before ffmpeg opened the device (focus/wb/brightness survive;
+        exposure does not). Re-apply once the stream is up so the pinned exposure
+        actually holds (verified: setting exposure while streaming sticks)."""
+        def _later():
+            time.sleep(1.5)
+            _apply_camera_controls()
+        threading.Thread(target=_later, daemon=True).start()
 
     def _kill_proc_unlocked(self, sigint):
         proc = self._proc
@@ -384,7 +411,13 @@ class CameraNode:
             free = _free_mb(OUTDIR)
             if MIN_FREE_MB and free is not None and free < MIN_FREE_MB:
                 return TriggerResponse(False, f"low disk: {free}MB < {MIN_FREE_MB}MB — not starting")
-            label = "flight_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            # recorder_mux pins one shared stem (this param) at ARM so every camera's
+            # file for the same flight matches: flight_<stamp>_cam1, _cam2, ...
+            # Empty/unset -> this node timestamps itself (manual/standalone use).
+            stem = str(rospy.get_param(STEM_PARAM, "")).strip() or \
+                   ("flight_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+            tag = _safe(TAG) if TAG else ""              # cam1/cam2 subfolder; "" = standalone
+            label = stem + ("_" + tag if tag else "")    # mp4 basename + manifest name
             if self._recording:
                 if ON_DUP != "rotate":
                     return TriggerResponse(False, f"already recording '{self._name}' (send stop first)")
@@ -392,7 +425,7 @@ class CameraNode:
                 self._finalize_recording_unlocked(reason="rotate")
             else:
                 self._kill_proc_unlocked(sigint=False)  # release preview ffmpeg
-            ok, msg = self._launch_recording_unlocked(label)
+            ok, msg = self._launch_recording_unlocked(stem, tag, label)
             return TriggerResponse(ok, msg)
 
     def _srv_stop(self, _req):
@@ -440,11 +473,35 @@ def _watchdog_loop(node):
         r.sleep()
 
 
+def _master_watchdog():
+    """The remote ROS master (Jetson roscore) restarts whenever the drone stack is
+    relaunched, which silently ORPHANS this node: rospy stays bound to the dead
+    master and never re-registers, so recording breaks with no error until a manual
+    restart. Detect a master restart (its PID changes) and exit — systemd
+    (Restart=always) then relaunches us onto the live master."""
+    m = rospy.get_master()
+    base = None
+    while not rospy.is_shutdown():
+        try:
+            pid = m.getPid()[2]
+            if base is None:
+                base = pid
+            elif pid != base:
+                rospy.logwarn("ROS master restarted (pid %s->%s) — exiting to re-register", base, pid)
+                rospy.signal_shutdown("ros master restarted")
+                time.sleep(2)
+                os._exit(1)
+        except Exception:
+            pass  # master briefly unreachable; keep polling until it (re)appears
+        time.sleep(5)
+
+
 def main():
-    rospy.init_node("recorder")
+    rospy.init_node(NODE_NAME)
     node = CameraNode()
     rospy.on_shutdown(node.shutdown)
     threading.Thread(target=_watchdog_loop, args=(node,), daemon=True).start()
+    threading.Thread(target=_master_watchdog, daemon=True).start()  # re-register if Jetson roscore restarts
     rospy.loginfo("recorder node ready (services: ~start ~stop). codec=%s outdir=%s", CODEC, OUTDIR)
     rospy.spin()
 

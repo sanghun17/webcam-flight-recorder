@@ -17,6 +17,7 @@ import csv as _csv
 import glob
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -27,6 +28,15 @@ DEFAULT_TIME_OFFSET = 0.73   # camera/ffmpeg warm-up; refine per-recording via c
 OPTICAL_FRAME = "webcam_optical"
 WORLD_FRAME = "odom"
 ODOM_TOPIC = "/vrpn_client_node/pure/pose"   # mocap pose, in the calibrated world
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+
+
+def camera_tag(name):
+    """camN from a flat label 'flight_<stamp>_cam2' OR a nested subfolder 'cam2',
+    else None. Lets the tooling pick per-camera defaults (base extrinsics, bag)."""
+    m = re.search(r"(?:^|_)(cam\d+)$", name)
+    return m.group(1) if m else None
 
 
 def load_odom(bag_path, topic=ODOM_TOPIC):
@@ -61,20 +71,50 @@ def _first(recdir, pats):
     return None
 
 
+def _sibling_bag(recdir, name):
+    """The odometry bag is one-per-flight but the mp4 is one-per-camera, so a
+    <flight>_cam2 folder holds only its own video. Fall back to a sibling
+    <flight>_camN folder (same flight, same stamp) for the shared bag."""
+    if "_cam" not in name:
+        return None
+    stem = name[:name.rfind("_cam")]
+    for sib in sorted(glob.glob(os.path.join(os.path.dirname(recdir), stem + "_cam*"))):
+        if os.path.abspath(sib) == recdir:
+            continue
+        b = _first(sib, [os.path.basename(sib) + ".bag", "*.bag"])
+        if b:
+            return b
+    return None
+
+
 def find_recording(recdir):
     recdir = os.path.abspath(recdir)
-    name = os.path.basename(recdir.rstrip("/"))
+    dname = os.path.basename(recdir.rstrip("/"))
+    video = _first(recdir, ["*.mp4", "*.mkv"])
+    # The manifest keys by the full flight_<stamp>_camN label; a nested subfolder is
+    # named just 'camN', so take the label from the mp4 basename when there is one.
+    name = os.path.splitext(os.path.basename(video))[0] if video else dname
+    tag = camera_tag(name) or camera_tag(dname)
     extr = None
     for c in ("webcam_extrinsics_clicked.json", "webcam_extrinsics.json"):
         if os.path.exists(os.path.join(recdir, c)):
             extr = os.path.join(recdir, c); break
+    if extr is None and tag:   # no per-folder extrinsics yet -> this camera's base
+        cand = os.path.join(REPO, "extrinsics", tag, "webcam_extrinsics.json")
+        if os.path.exists(cand):
+            extr = cand
+    parent = os.path.dirname(recdir)
+    # bag: this folder (flat) -> the parent flight folder (nested) -> a sibling cam
+    bag = (_first(recdir, [name + ".bag", "*.bag"])
+           or _first(parent, ["*.bag"])
+           or _sibling_bag(recdir, dname))
     info = {
         "name": name,
         "dir": recdir,
-        "bag": _first(recdir, [name + ".bag", "*.bag"]),
-        "video": _first(recdir, [name + ".mp4", name + ".mkv", "*.mp4", "*.mkv"]),
+        "bag": bag,
+        "video": video,
         "extr": extr,
-        "rviz": _first(recdir, ["rviz.rviz", "*.rviz"]),
+        "rviz": _first(recdir, ["rviz.rviz", "*.rviz"]) or _first(parent, ["rviz.rviz", "*.rviz"]),
     }
     info["start_epoch"] = video_start_epoch(name, recdir)
     info["time_offset"] = time_offset(extr)
@@ -83,9 +123,18 @@ def find_recording(recdir):
 
 def video_start_epoch(name, recdir):
     """Wall-clock epoch of video frame 0, from recordings.csv `start` (local tz).
-    csv lives in the parent recordings/ dir. Returns None if not found."""
-    csvpath = os.path.join(os.path.dirname(recdir), "recordings.csv")
-    if not os.path.exists(csvpath):
+    The manifest lives in the top recordings/ dir; walk up to find it (a nested cam
+    folder sits two levels below it). Returns None if not found."""
+    csvpath, d = None, recdir
+    for _ in range(4):
+        p = os.path.join(d, "recordings.csv")
+        if os.path.exists(p):
+            csvpath = p; break
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    if not csvpath:
         return None
     with open(csvpath) as f:
         for row in _csv.DictReader(f):
