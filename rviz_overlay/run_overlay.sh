@@ -20,7 +20,9 @@ BAG="$(field bag)"
 for k in bag video extr; do
     [ -n "$(field "$k")" ] || { echo "!! missing '$k' in $REC_DIR — waiting for the remote to send bag/extrinsics/rviz?"; exit 1; }
 done
-OVER="$HERE/rviz_overlay.rviz"          # standard display setup (same across flights)
+# this flight's own rviz.rviz (from the jetson); repo copy only for old recordings
+OVER="$(python3 -c "import sys;sys.path.insert(0,'$PROJ');import overlay_lib as o;print(o.build_configs('$REC_DIR')[0] or '')")"
+[ -f "$OVER" ] || { OVER="$HERE/rviz_overlay.rviz"; echo "!! no rviz.rviz in recording; using repo snapshot (topics may be stale)"; }
 TF_ARGS="$(python3 "$PROJ/overlay_lib.py" tf "$REC_DIR")"
 echo ">>> $REC_DIR  (isolated master $ROS_MASTER_URI)"
 

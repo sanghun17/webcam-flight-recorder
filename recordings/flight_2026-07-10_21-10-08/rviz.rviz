@@ -1,0 +1,467 @@
+Panels:
+  - Class: rviz/Displays
+    Help Height: 0
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /Status1
+        - /Sensor1
+        - /Estimation1
+        - /Estimation1/FastLivo_Odometry1/Shape1
+        - /Voxblox1
+        - /Voxblox1/Voxblox_Trajectory1/Namespaces1
+        - /Jax1
+      Splitter Ratio: 0.44215530157089233
+    Tree Height: 601
+  - Class: rviz/Selection
+    Name: Selection
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Pose Estimate1
+      - /2D Nav Goal1
+      - /Publish Point1
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+  - Class: rviz/Time
+    Name: Time
+    SyncMode: 0
+    SyncSource: Voxblox_Feature
+Preferences:
+  PromptSaveOnExit: true
+Toolbars:
+  toolButtonStyle: 2
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 1
+      Class: rviz/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 10
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /camera/color/image_raw
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Image_RGB
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Unreliable: false
+          Value: false
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /camera/depth/image_rect_raw
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Image_Depth
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Unreliable: false
+          Value: false
+        - Class: rviz/Image
+          Enabled: false
+          Image Topic: /camera/depth_overlay
+          Max Value: 1
+          Median window: 5
+          Min Value: 0
+          Name: Image_Depth_Projected
+          Normalize Range: true
+          Queue Size: 2
+          Transport Hint: raw
+          Unreliable: false
+          Value: false
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 3.799992322921753
+            Min Value: -0.2372846156358719
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: RGB8
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Min Color: 0; 0; 0
+          Name: PointCloud_RGB
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.019999999552965164
+          Style: Points
+          Topic: /camera/depth/color/points_10hz
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
+      Enabled: true
+      Name: Sensor
+    - Class: rviz/Group
+      Displays:
+        - Angle Tolerance: 0.10000000149011612
+          Class: rviz/Odometry
+          Covariance:
+            Orientation:
+              Alpha: 0.5
+              Color: 255; 255; 127
+              Color Style: Unique
+              Frame: Local
+              Offset: 1
+              Scale: 1
+              Value: true
+            Position:
+              Alpha: 0.30000001192092896
+              Color: 204; 51; 204
+              Scale: 1
+              Value: true
+            Value: true
+          Enabled: true
+          Keep: 1
+          Name: FastLivo_Odometry
+          Position Tolerance: 0.10000000149011612
+          Queue Size: 10
+          Shape:
+            Alpha: 1
+            Axes Length: 1
+            Axes Radius: 0.10000000149011612
+            Color: 0; 0; 255
+            Head Length: 0.30000001192092896
+            Head Radius: 0.20000000298023224
+            Shaft Length: 0.5
+            Shaft Radius: 0.10000000149011612
+            Value: Arrow
+          Topic: /aft_mapped_to_body_imu_propagated
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Axes Length: 1
+          Axes Radius: 0.10000000149011612
+          Class: rviz/Pose
+          Color: 255; 25; 0
+          Enabled: true
+          Head Length: 0.30000001192092896
+          Head Radius: 0.10000000149011612
+          Name: Mavros_Localposition
+          Queue Size: 10
+          Shaft Length: 1
+          Shaft Radius: 0.05000000074505806
+          Shape: Arrow
+          Topic: /mavros/local_position/pose
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Axes Length: 1
+          Axes Radius: 0.10000000149011612
+          Class: rviz/Pose
+          Color: 0; 255; 0
+          Enabled: true
+          Head Length: 0.10000000149011612
+          Head Radius: 0.20000000298023224
+          Name: Optitrack_Pose
+          Queue Size: 10
+          Shaft Length: 0.4000000059604645
+          Shaft Radius: 0.10000000149011612
+          Shape: Arrow
+          Topic: /vrpn_client_node/pure/pose
+          Unreliable: false
+          Value: true
+        - Alpha: 1
+          Class: rviz/Axes
+          Enabled: true
+          Length: 1
+          Name: Odom_Axes
+          Radius: 0.05000000074505806
+          Reference Frame: odom
+          Show Trail: false
+          Value: true
+      Enabled: true
+      Name: Estimation
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /planner/planner_node/trajectory_visualization
+          Name: Voxblox_Trajectory
+          Namespaces:
+            completed_trajectory: false
+            text_best: false
+            text_candidate: false
+            text_lookahead: false
+            trajectories_best: true
+            trajectories_candidate: false
+            trajectories_lookahead: true
+            yaw_best: true
+            yaw_candidate: false
+            yaw_lookahead: true
+          Queue Size: 100
+          Value: true
+        - Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 10
+            Min Value: -10
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 0; 0
+          Color Transformer: FlatColor
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Min Color: 0; 0; 0
+          Name: Voxblox_Feature
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.07500000298023224
+          Style: Flat Squares
+          Topic: /planner/voxblox_node/uncertainty_pointcloud
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
+        - Alpha: 0.75
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Max Value: 3.125
+            Min Value: -2.875
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Class: rviz/PointCloud2
+          Color: 255; 255; 255
+          Color Transformer: RGB8
+          Decay Time: 0
+          Enabled: true
+          Invert Rainbow: false
+          Max Color: 255; 255; 255
+          Min Color: 0; 0; 0
+          Name: Voxblox_Surface
+          Position Transformer: XYZ
+          Queue Size: 10
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.10000000149011612
+          Style: Boxes
+          Topic: /planner/voxblox_node/surface_pointcloud
+          Unreliable: false
+          Use Fixed Frame: true
+          Use rainbow: true
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /planner/planner_node/bbox
+          Name: Voxblox_Bbox
+          Namespaces:
+            sdf_map_bbox: true
+            target_bbox: true
+          Queue Size: 100
+          Value: true
+      Enabled: true
+      Name: Voxblox
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /local_planner/goal_pose
+          Name: Jax_Goal_Pose
+          Namespaces:
+            goal_pose: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /local_planner/sampled_trajectories/safe
+          Name: Jax_Sample_Safe_Traj
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /local_planner/sampled_trajectories/unsafe
+          Name: Jax_Sample_Unsafe_Traj
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /local_planner/optimal_trajectory
+          Name: Jax_Optimal_Traj
+          Namespaces:
+            optimal_trajectory: true
+            optimal_trajectory_fov: true
+          Queue Size: 100
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: false
+          Marker Topic: /local_planner/uncertainty_risk
+          Name: Jax_Optimal_Uncertainty
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: false
+      Enabled: true
+      Name: Jax
+    - Class: rviz/TF
+      Enabled: false
+      Filter (blacklist): ""
+      Filter (whitelist): ""
+      Frame Timeout: 15
+      Frames:
+        All Enabled: false
+      Marker Alpha: 1
+      Marker Scale: 1
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        {}
+      Update Interval: 0
+      Value: false
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /flight_safety/geofence
+          Name: Safety_Geofence
+          Namespaces:
+            geofence: true
+          Queue Size: 100
+          Value: true
+      Enabled: true
+      Name: Flight_Safety
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /recorder_cam1/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Recorder_Cam1
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+    - Class: rviz/Image
+      Enabled: false
+      Image Topic: /recorder_cam2/image_raw
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Recorder_Cam2
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: compressed
+      Unreliable: false
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Default Light: true
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetInitialPose
+      Theta std deviation: 0.2617993950843811
+      Topic: /initialpose
+      X std deviation: 0.5
+      Y std deviation: 0.5
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 8.96358871459961
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Field of View: 0.7853981852531433
+      Focal Point:
+        X: 0.25402429699897766
+        Y: 0.04978673905134201
+        Z: 0.54034024477005
+      Focal Shape Fixed Size: false
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 1.5697963237762451
+      Target Frame: <Fixed Frame>
+      Yaw: 0.005441074259579182
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 845
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Image_Depth:
+    collapsed: false
+  Image_Depth_Projected:
+    collapsed: false
+  Image_RGB:
+    collapsed: false
+  QMainWindow State: 000000ff00000000fd00000004000000000000027900000296fc020000000dfb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005d00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afc0000003e00000296000000cb00fffffffa000000010100000002fb0000002a0049006d006100670065005f00440065007000740068005f00500072006f006a006500630074006500640000000000ffffffff000000e700fffffffb000000100044006900730070006c00610079007301000000000000026d0000015600fffffffc0000025f000000750000000000fffffffaffffffff0100000003fb0000001a005200650063006f0072006400650072005f00430061006d00320000000000ffffffff000000b400fffffffb0000001a005200650063006f0072006400650072005f00430061006d00310000000000ffffffff000000b400fffffffb000000120049006d006100670065005f0052004700420000000000000002790000009800fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fc0000018f000000ad0000000000fffffffa000000000100000001fb0000002a0049006d006100670065005f00440065007000740068005f00500072006f006a006500630074006500640100000000ffffffff0000000000000000fb0000000c00430061006d006500720061000000026d000000c10000000000000000fb000000160049006d006100670065005f004400650070007400680000000205000000e70000001600fffffffb000000160054006500730074006200650064005f00430061006d000000021a000000ba0000000000000000000000010000010f000002a9fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000003e000002a9000000a500fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000640000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000064000000056fc0100000002fb0000000800540069006d00650100000000000006400000033700fffffffb0000000800540069006d00650100000000000004500000000000000000000003c10000029600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Recorder_Cam1:
+    collapsed: false
+  Recorder_Cam2:
+    collapsed: false
+  Selection:
+    collapsed: false
+  Time:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1600
+  X: -8
+  Y: -11
