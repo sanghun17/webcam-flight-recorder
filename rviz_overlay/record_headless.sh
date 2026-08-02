@@ -29,6 +29,7 @@
 #     it on another virtual desktop just freezes the capture.
 # The clean fix is VirtualGL (renders via EGL on any GPU, blits into Xvfb), which is
 # not packaged for Ubuntu 20.04 and needs a one-time root install.
+set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROJ="$(dirname "$HERE")"
 REC_DIR="$(readlink -f "${1:-$PROJ/recordings/safety_2026-06-30-14-17-18}")"
