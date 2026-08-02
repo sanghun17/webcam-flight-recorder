@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fully headless (Xvfb) recording of a recording's rviz overlay -> mp4.
 #   ./record_headless.sh [RECORDING_DIR]      (default: the sample recording)
+#   UNCERTAINTY_VIZ_SCALE=0.5 ./record_headless.sh [RECORDING_DIR]
 #   TEST_SHOT=1 ./record_headless.sh [DIR]    # set up + one screenshot (tuning)
 #
 # Nothing shows on the physical screen. Isolated ROS master. Plays the bag slowed
@@ -43,6 +44,19 @@ export ROS_MASTER_URI="http://127.0.0.1:$PORT" ROS_HOSTNAME=127.0.0.1; unset ROS
 # feeds it 1:1. Texture upload dominates rviz's per-frame cost, so this is the knob
 # that matters -- panel size and scene complexity barely move it.
 export OVERLAY_SCALE="${OVERLAY_SCALE:-0.75}"
+UNCERTAINTY_VIZ_SCALE="$(python3 - "${UNCERTAINTY_VIZ_SCALE:-1}" <<'PY'
+import math
+import sys
+
+try:
+    value = float(sys.argv[1])
+except ValueError:
+    raise SystemExit(f"!! invalid UNCERTAINTY_VIZ_SCALE={sys.argv[1]!r}: expected a number > 0")
+if not math.isfinite(value) or value <= 0:
+    raise SystemExit(f"!! invalid UNCERTAINTY_VIZ_SCALE={value!r}: expected a finite number > 0")
+print(f"{value:.12g}")
+PY
+)"
 
 field() { python3 -c "import sys;sys.path.insert(0,'$PROJ');import overlay_lib as o;print(o.find_recording('$REC_DIR')['$1'] or '')"; }
 BAG="$(field bag)"
@@ -116,6 +130,15 @@ rosparam set /use_sim_time true
 rosrun tf2_ros static_transform_publisher $TF & pids+=($!)
 python3 "$HERE/video_publisher.py" & pids+=($!)
 "${RVIZ[@]}" -d "$CAP" & pids+=($!)
+bag_remaps=()
+if [ "$UNCERTAINTY_VIZ_SCALE" != "1" ]; then
+    python3 "$HERE/marker_scale_relay.py" \
+        _scale:="$UNCERTAINTY_VIZ_SCALE" \
+        _input_topic:=/local_planner/uncertainty_risk_raw \
+        _output_topic:=/local_planner/uncertainty_risk & pids+=($!)
+    bag_remaps+=("/local_planner/uncertainty_risk:=/local_planner/uncertainty_risk_raw")
+fi
+echo ">>> uncertainty ellipsoid visualization scale: x$UNCERTAINTY_VIZ_SCALE"
 
 PW="${PANEL_W:-1920}"; PH="${PANEL_H:-1440}"; TITLE="${TITLE_H:-26}"
 echo ">>> waiting for rviz camera panel..."
@@ -132,7 +155,7 @@ sleep 3
 CW=$PW; CH=$((PH - TITLE))
 echo "panel WID=$WID capture=${CW}x${CH}+0,${TITLE}"
 if [ -n "$TEST_SHOT" ]; then
-    rosbag play --clock --start 20 "$BAG" & pids+=($!)
+    rosbag play --clock --start 20 "$BAG" "${bag_remaps[@]}" & pids+=($!)
     sleep 6
     ffmpeg -y -f x11grab -draw_mouse 0 -video_size "${CW}x${CH}" -i ":99.0+0,${TITLE}" -frames:v 1 "$S/hs_shot.png" 2>&1 | tail -1
     echo "SHOT_DONE"; sleep 2; exit 0
@@ -154,7 +177,7 @@ ffmpeg -y -f x11grab -draw_mouse 0 -framerate "$GRAB" -video_size "${CW}x${CH}" 
        -vf "setpts=PTS*${RATE}" -r 30 -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \
        "$OUT" 2>/dev/null & FF=$!
 sleep 1
-rosbag play --clock -r "$RATE" "$BAG"
+rosbag play --clock -r "$RATE" "$BAG" "${bag_remaps[@]}"
 sleep 1; kill -INT "$FF" 2>/dev/null; wait "$FF" 2>/dev/null
 echo "DONE -> $OUT"
 sleep 1
