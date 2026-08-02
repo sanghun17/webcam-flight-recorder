@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 # Double-click: render THIS recording's rviz overlay to overlay_rviz.mp4, fully
 # headless (nothing on screen, ~2-3 min), then open the result.
 if [ -z "$OVERLAY_IN_TERM" ] && ! [ -t 1 ]; then
