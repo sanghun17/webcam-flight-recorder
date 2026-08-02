@@ -16,6 +16,8 @@ export REC_DIR
 source /opt/ros/noetic/setup.bash
 PORT="${ROS_OVERLAY_PORT:-11399}"
 export ROS_MASTER_URI="http://127.0.0.1:$PORT" ROS_HOSTNAME=127.0.0.1; unset ROS_IP
+exec 9>"/tmp/webcam-rviz-overlay-${PORT}.lock"
+flock -n 9 || { echo "!! another overlay job is already using ROS port $PORT"; exit 1; }
 export OVERLAY_SCALE="${OVERLAY_SCALE:-0.5}"
 UNCERTAINTY_VIZ_SCALE="$(python3 - "${UNCERTAINTY_VIZ_SCALE:-${2:-1}}" <<'PY'
 import math
@@ -43,7 +45,21 @@ TF_ARGS="$(python3 "$PROJ/overlay_lib.py" tf "$REC_DIR")"
 echo ">>> $REC_DIR  (isolated master $ROS_MASTER_URI)"
 echo ">>> uncertainty ellipsoid visualization scale: x$UNCERTAINTY_VIZ_SCALE"
 
-pids=(); cleanup(){ kill "${pids[@]}" 2>/dev/null || true; }
+pids=()
+process_tree() {
+    local parent="$1" child
+    for child in $(pgrep -P "$parent" 2>/dev/null || true); do process_tree "$child"; done
+    echo "$parent"
+}
+cleanup() {
+    local targets=() p q
+    for p in "${pids[@]:-}"; do
+        while read -r q; do targets+=("$q"); done < <(process_tree "$p")
+    done
+    [ "${#targets[@]}" -eq 0 ] || kill -INT "${targets[@]}" 2>/dev/null || true
+    sleep 0.3
+    [ "${#targets[@]}" -eq 0 ] || kill -TERM "${targets[@]}" 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
 roscore -p "$PORT" & pids+=($!)
 until rostopic list >/dev/null 2>&1; do sleep 0.3; done

@@ -41,6 +41,8 @@ RES="${XVFB_RES:-2048x1536}"
 source /opt/ros/noetic/setup.bash
 PORT="${ROS_OVERLAY_PORT:-11399}"
 export ROS_MASTER_URI="http://127.0.0.1:$PORT" ROS_HOSTNAME=127.0.0.1; unset ROS_IP
+exec 9>"/tmp/webcam-rviz-overlay-${PORT}.lock"
+flock -n 9 || { echo "!! another overlay job is already using ROS port $PORT"; exit 1; }
 # The Camera panel is 1920 wide, so 0.75 (1944px) is the smallest image that still
 # feeds it 1:1. Texture upload dominates rviz's per-frame cost, so this is the knob
 # that matters -- panel size and scene complexity barely move it.
@@ -80,7 +82,20 @@ TF="$(python3 "$PROJ/overlay_lib.py" tf "$REC_DIR")"
 # Kill only what we started: a bare `pkill -f rviz/rosmaster` also kills any ROS
 # session the user has open elsewhere on this machine.
 pids=()
-cleanup() { for p in "${pids[@]:-}"; do kill "$p" 2>/dev/null; done; return 0; }
+process_tree() {
+    local parent="$1" child
+    for child in $(pgrep -P "$parent" 2>/dev/null || true); do process_tree "$child"; done
+    echo "$parent"
+}
+cleanup() {
+    local targets=() p q
+    for p in "${pids[@]:-}"; do
+        while read -r q; do targets+=("$q"); done < <(process_tree "$p")
+    done
+    [ "${#targets[@]}" -eq 0 ] || kill -INT "${targets[@]}" 2>/dev/null || true
+    sleep 0.3
+    [ "${#targets[@]}" -eq 0 ] || kill -TERM "${targets[@]}" 2>/dev/null || true
+}
 trap cleanup EXIT INT TERM
 
 echo ">>> starting virtual display..."
@@ -177,8 +192,10 @@ echo ">>> recording at ${RATE}x, grabbing ${GRAB}fps (bag ${DUR}s -> ~$(python3 
 ffmpeg -y -f x11grab -draw_mouse 0 -framerate "$GRAB" -video_size "${CW}x${CH}" -i ":99.0+0,${TITLE}" \
        -vf "setpts=PTS*${RATE}" -r 30 -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \
        "$OUT" 2>/dev/null & FF=$!
+pids+=($FF)
 sleep 1
 rosbag play --clock -r "$RATE" "$BAG" "${bag_remaps[@]}"
-sleep 1; kill -INT "$FF" 2>/dev/null; wait "$FF" 2>/dev/null
+sleep 1; kill -INT "$FF" 2>/dev/null; wait "$FF" 2>/dev/null || true
+# ffmpeg normally reports its requested SIGINT as non-zero; the finalized MP4 is valid.
 echo "DONE -> $OUT"
 sleep 1
