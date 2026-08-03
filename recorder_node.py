@@ -477,10 +477,19 @@ def _master_watchdog():
     """The remote ROS master (Jetson roscore) restarts whenever the drone stack is
     relaunched, which silently ORPHANS this node: rospy stays bound to the dead
     master and never re-registers, so recording breaks with no error until a manual
-    restart. Detect a master restart (its PID changes) and exit — systemd
-    (Restart=always) then relaunches us onto the live master."""
+    restart. Detect a master restart and exit — systemd (Restart=always) then
+    relaunches us onto the live master.
+
+    PID alone is not an incarnation ID: roscore runs in a container and can be
+    assigned the same PID after a restart (observed 2026-08-03, pid 85 -> 85).
+    Therefore also require the live master to resolve our node name back to
+    this process's XML-RPC URI. A fresh master has no such registration even
+    when its PID was reused.
+    """
     m = rospy.get_master()
     base = None
+    node_name = rospy.get_name()
+    node_uri = rospy.get_node_uri()
     while not rospy.is_shutdown():
         try:
             pid = m.getPid()[2]
@@ -489,6 +498,15 @@ def _master_watchdog():
             elif pid != base:
                 rospy.logwarn("ROS master restarted (pid %s->%s) — exiting to re-register", base, pid)
                 rospy.signal_shutdown("ros master restarted")
+                time.sleep(2)
+                os._exit(1)
+
+            code, _message, registered_uri = m.lookupNode(node_name)
+            if code != 1 or registered_uri != node_uri:
+                rospy.logwarn(
+                    "ROS master lost this node registration (%s: expected %s, got %s) "
+                    "— exiting to re-register", node_name, node_uri, registered_uri)
+                rospy.signal_shutdown("ros master lost node registration")
                 time.sleep(2)
                 os._exit(1)
         except Exception:
