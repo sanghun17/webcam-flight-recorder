@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 # Double-click: render THIS recording's rviz overlay to overlay_rviz.mp4, fully
-# headless (nothing on screen, ~2-3 min), then open the result.
+# headless (nothing on screen, ~2-3 min). The result is not opened automatically.
 if [ -z "$OVERLAY_IN_TERM" ] && ! [ -t 1 ]; then
     export OVERLAY_IN_TERM=1; SELF="$(readlink -f "$0")"
     for TE in gnome-terminal x-terminal-emulator xterm; do
@@ -14,4 +14,4 @@ REPO=/home/ml/webcam_recorder
 echo ">>> Rendering rviz overlay to mp4 (headless, ~2-3 min)..."
 bash "$REPO/rviz_overlay/record_headless.sh" "$DIR"
 OUT="$DIR/overlay_rviz.mp4"
-[ -f "$OUT" ] && { echo ">>> Done: $OUT"; xdg-open "$OUT" >/dev/null 2>&1 || true; }
+[ -f "$OUT" ] && echo ">>> Done: $OUT"
