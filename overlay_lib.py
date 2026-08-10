@@ -198,7 +198,39 @@ def _add_camera_display(cfg):
                  "Unreliable": False, "Value": True, "Zoom Factor": 1})
 
 
-def build_configs(recdir):
+def _add_fastlivo_history_display(cfg):
+    """Add the replay-only aligned FAST-LIVO history to the Estimation group."""
+    display = {
+        "Class": "rviz/MarkerArray",
+        "Enabled": True,
+        "Marker Topic": "/fast_livo/odom_history",
+        "Name": "FastLivo_History",
+        "Namespaces": {"fast_livo_history": True},
+        "Queue Size": 10,
+        "Value": True,
+    }
+    top_level = cfg["Visualization Manager"]["Displays"]
+    target = top_level
+
+    def find_estimation(displays):
+        for item in displays:
+            children = item.get("Displays")
+            if item.get("Name") == "Estimation" and isinstance(children, list):
+                return children
+            if isinstance(children, list):
+                found = find_estimation(children)
+                if found is not None:
+                    return found
+        return None
+
+    estimation = find_estimation(top_level)
+    if estimation is not None:
+        target = estimation
+    target[:] = [item for item in target if item.get("Name") != "FastLivo_History"]
+    target.append(display)
+
+
+def build_configs(recdir, fastlivo_history=False):
     """From the folder's rviz.rviz make .rviz_overlay.rviz (adds Camera display)
     and .rviz_capture.rviz (also strips side panels + empty Image docks)."""
     import yaml
@@ -211,10 +243,14 @@ def build_configs(recdir):
 
     cfg = yaml.safe_load(open(base))
     _add_camera_display(cfg)
+    if fastlivo_history:
+        _add_fastlivo_history_display(cfg)
     yaml.safe_dump(cfg, open(over, "w"), default_flow_style=False, sort_keys=False)
 
     cfg = yaml.safe_load(open(base))
     _add_camera_display(cfg)
+    if fastlivo_history:
+        _add_fastlivo_history_display(cfg)
     cfg["Panels"] = []
 
     def strip(ds):

@@ -144,10 +144,24 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=DEFAULT_DIR, help="recording folder")
     ap.add_argument("--n", type=int, default=20)
-    ap.add_argument("--offset", type=float, default=0.0)
+    ap.add_argument(
+        "--offset", type=float, default=0.0,
+        help="initial video->bag time offset used to choose click frames")
+    ap.add_argument(
+        "--offset-min", type=float, default=-0.5,
+        help="lower bound of the joint time-offset search (default: -0.5s)")
+    ap.add_argument(
+        "--offset-max", type=float, default=1.5,
+        help="upper bound of the joint time-offset search (default: +1.5s)")
     ap.add_argument("--out", default=None, help="output extrinsics (default: <dir>/webcam_extrinsics_clicked.json)")
     ap.add_argument("--clicks", default=None, help="reuse a saved clicks json (skip GUI)")
     args = ap.parse_args()
+    if not np.isfinite(args.offset_min) or not np.isfinite(args.offset_max):
+        ap.error("--offset-min/--offset-max must be finite")
+    if args.offset_min >= args.offset_max:
+        ap.error("--offset-min must be smaller than --offset-max")
+    if not args.offset_min <= args.offset <= args.offset_max:
+        ap.error("--offset must lie inside [--offset-min, --offset-max]")
 
     info = overlay_lib.find_recording(args.dir)
     REC, BAG, VIDEO = info["dir"], info["bag"], info["video"]
@@ -200,7 +214,13 @@ def main():
         return reproj_rms(objp, imgp, rv, tv, K, dist), rv, tv
 
     best = (1e9, None, None, 0.0)
-    for off in np.arange(-0.5, 1.5, 0.02):
+    print(f"time-offset search: [{args.offset_min:+.3f}, "
+          f"{args.offset_max:+.3f}]s (initial {args.offset:+.3f}s)")
+    # The old fixed [-0.5,+1.5]s range silently failed when a webcam encoder
+    # started several seconds after the second-resolution recordings.csv time.
+    # Keep those defaults for existing sessions, but let each recording widen
+    # the search without changing the synchronized bag or source MP4.
+    for off in np.arange(args.offset_min, args.offset_max + 1e-9, 0.02):
         rms, rv, tv = solve_at(off)
         if rms < best[0]:
             best = (rms, rv, tv, off)

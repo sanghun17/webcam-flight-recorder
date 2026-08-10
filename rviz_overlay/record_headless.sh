@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
+# Set OVERLAY_BAG=/path/to/augmented.bag to render an alternate bag while
+# retaining this recording's video, extrinsics, and RViz configuration.
 # Fully headless (Xvfb) recording of a recording's rviz overlay -> mp4.
 #   ./record_headless.sh [RECORDING_DIR]      (default: the sample recording)
 #   UNCERTAINTY_VIZ_SCALE=0.5 ./record_headless.sh [RECORDING_DIR]
+#   FASTLIVO_HIDE_PREALIGN=1 ./record_headless.sh [DIR]  # visualization only
+#   FASTLIVO_HISTORY=1 ./record_headless.sh [DIR]         # aligned brown trail
+#   OVERLAY_OUT=/path/new.mp4 ./record_headless.sh [DIR]  # preserve default mp4
 #   TEST_SHOT=1 ./record_headless.sh [DIR]    # set up + one screenshot (tuning)
 #
 # Nothing shows on the physical screen. Isolated ROS master. Plays the bag slowed
@@ -35,18 +40,28 @@ PROJ="$(dirname "$HERE")"
 REC_DIR="$(readlink -f "${1:-$PROJ/recordings/safety_2026-06-30-14-17-18}")"
 export REC_DIR
 S="${SCRATCH:-/tmp}"
-OUT="$REC_DIR/overlay_rviz.mp4"
+OUT="${OVERLAY_OUT:-$REC_DIR/overlay_rviz.mp4}"
 RES="${XVFB_RES:-2048x1536}"
+
+FASTLIVO_HIDE_PREALIGN="${FASTLIVO_HIDE_PREALIGN:-0}"
+FASTLIVO_HISTORY="${FASTLIVO_HISTORY:-0}"
+case "$FASTLIVO_HIDE_PREALIGN:$FASTLIVO_HISTORY" in
+    0:0|0:1|1:0|1:1) ;;
+    *) echo "!! FASTLIVO_HIDE_PREALIGN and FASTLIVO_HISTORY must be 0 or 1"; exit 1 ;;
+esac
+[ -d "$(dirname "$OUT")" ] || { echo "!! output directory does not exist: $(dirname "$OUT")"; exit 1; }
 
 source /opt/ros/noetic/setup.bash
 PORT="${ROS_OVERLAY_PORT:-11399}"
 export ROS_MASTER_URI="http://127.0.0.1:$PORT" ROS_HOSTNAME=127.0.0.1; unset ROS_IP
 exec 9>"/tmp/webcam-rviz-overlay-${PORT}.lock"
 flock -n 9 || { echo "!! another overlay job is already using ROS port $PORT"; exit 1; }
-# The Camera panel is 1920 wide, so 0.75 (1944px) is the smallest image that still
-# feeds it 1:1. Texture upload dominates rviz's per-frame cost, so this is the knob
-# that matters -- panel size and scene complexity barely move it.
-export OVERLAY_SCALE="${OVERLAY_SCALE:-0.75}"
+# 0.75 produces an 8.50MB raw ROS image (about 255MB/s at 30Hz) and amplified the
+# old publisher's stale-frame scheduling bug.  The fixed publisher also passes
+# at 0.75, but 0.5 (3.78MB/frame, about 113MB/s) leaves substantial ROS/RViz
+# texture-upload headroom against regressions.  The captured panel is still
+# 1920px wide; RViz performs the final display scale.
+export OVERLAY_SCALE="${OVERLAY_SCALE:-0.5}"
 UNCERTAINTY_VIZ_SCALE="$(python3 - "${UNCERTAINTY_VIZ_SCALE:-1}" <<'PY'
 import math
 import sys
@@ -62,8 +77,9 @@ PY
 )"
 
 field() { python3 -c "import sys;sys.path.insert(0,'$PROJ');import overlay_lib as o;print(o.find_recording('$REC_DIR')['$1'] or '')"; }
-BAG="$(field bag)"
-for k in bag video extr; do
+BAG="${OVERLAY_BAG:-$(field bag)}"
+[ -f "$BAG" ] || { echo "!! missing bag: $BAG"; exit 1; }
+for k in video extr; do
     [ -n "$(field "$k")" ] || { echo "!! missing '$k' in $REC_DIR"; exit 1; }
 done
 # Capture config is derived from THIS flight's rviz.rviz (shipped from the jetson),
@@ -73,7 +89,7 @@ done
 # Override with OVERLAY_RVIZ_CFG=/path/to/some.rviz to render a different look.
 CAP="${OVERLAY_RVIZ_CFG:-}"
 if [ -z "$CAP" ]; then
-    CAP="$(python3 -c "import sys;sys.path.insert(0,'$PROJ');import overlay_lib as o;print(o.build_configs('$REC_DIR')[1] or '')")"
+    CAP="$(python3 -c "import sys;sys.path.insert(0,'$PROJ');import overlay_lib as o;print(o.build_configs('$REC_DIR', fastlivo_history=('$FASTLIVO_HISTORY' == '1'))[1] or '')")"
     [ -f "$CAP" ] || { CAP="$HERE/rviz_capture.rviz"; echo "!! no rviz.rviz in recording; using repo snapshot (topics may be stale)"; }
 fi
 echo ">>> rviz config: $CAP"
@@ -147,6 +163,30 @@ rosrun tf2_ros static_transform_publisher $TF & pids+=($!)
 python3 "$HERE/video_publisher.py" & pids+=($!)
 "${RVIZ[@]}" -d "$CAP" & pids+=($!)
 bag_remaps=()
+if [ "$FASTLIVO_HIDE_PREALIGN" = "1" ] || [ "$FASTLIVO_HISTORY" = "1" ]; then
+    # FAST-LIVO's high-rate body odometry is local until the OptiTrack anchor is
+    # latched.  Remap the recorded stream and expose it to RViz only after the
+    # first globally aligned output.  After that point the relay preserves every
+    # Odometry message unchanged; the source bag and estimator output stay intact.
+    relay_args=(
+        "_input_topic:=/aft_mapped_to_body_imu_propagated_raw"
+        "_output_topic:=/aft_mapped_to_body_imu_propagated"
+        "_anchor_topic:=/aft_mapped_to_optitrack"
+    )
+    if [ "$FASTLIVO_HISTORY" = "1" ]; then
+        relay_args+=(
+            "_history_topic:=/fast_livo/odom_history"
+            "_history_min_distance:=0.02"
+            "_history_max_period:=0.10"
+            "_history_publish_period:=0.10"
+            "_history_width:=0.025"
+        )
+    fi
+    python3 -u "$HERE/odom_after_anchor_relay.py" "${relay_args[@]}" & pids+=($!)
+    bag_remaps+=("/aft_mapped_to_body_imu_propagated:=/aft_mapped_to_body_imu_propagated_raw")
+    echo ">>> FAST-LIVO pre-alignment odometry hidden from visualization"
+    [ "$FASTLIVO_HISTORY" != "1" ] || echo ">>> FAST-LIVO aligned history enabled (brown)"
+fi
 if [ "$UNCERTAINTY_VIZ_SCALE" != "1" ]; then
     python3 "$HERE/marker_scale_relay.py" \
         _scale:="$UNCERTAINTY_VIZ_SCALE" \
@@ -170,6 +210,34 @@ xdotool windowsize "$WID" "$PW" "$PH"; xdotool windowmove "$WID" 0 0
 sleep 3
 CW=$PW; CH=$((PH - TITLE))
 echo "panel WID=$WID capture=${CW}x${CH}+0,${TITLE}"
+
+# Prime /use_sim_time and the webcam texture before recording.  Previously the
+# capture began on a black Camera panel and bag playback raced RViz's first large
+# image upload; depending on load this left 2--5 seconds of black/stale output.
+# A single clock value at the exact bag start lets video_publisher decode the
+# correct first frame without advancing any recorded topic or creating a time
+# rewind.  Wait for one delivered image, then give RViz one render interval.
+read -r BAG_START_SEC BAG_START_NSEC < <(python3 - "$BAG" <<'PY'
+import rosbag
+import sys
+
+with rosbag.Bag(sys.argv[1]) as bag:
+    total_ns = int(round(bag.get_start_time() * 1e9))
+print(total_ns // 1_000_000_000, total_ns % 1_000_000_000)
+PY
+)
+FIRST_IMAGE="$S/webcam-first-image-${PORT}.txt"
+timeout 10 rostopic echo -n 1 /webcam/image_rect/header >"$FIRST_IMAGE" 2>/dev/null & FIRST_IMAGE_PID=$!
+sleep 0.2
+rostopic pub -1 /clock rosgraph_msgs/Clock \
+    "clock: {secs: $BAG_START_SEC, nsecs: $BAG_START_NSEC}" >/dev/null
+if wait "$FIRST_IMAGE_PID"; then
+    echo ">>> webcam first frame ready at bag start ${BAG_START_SEC}.${BAG_START_NSEC}"
+else
+    echo "!! webcam first-frame handshake timed out"; exit 1
+fi
+sleep 0.5
+
 if [ -n "$TEST_SHOT" ]; then
     rosbag play --clock --start 20 "$BAG" "${bag_remaps[@]}" & pids+=($!)
     sleep 6
@@ -193,7 +261,7 @@ ffmpeg -y -f x11grab -draw_mouse 0 -framerate "$GRAB" -video_size "${CW}x${CH}" 
        -vf "setpts=PTS*${RATE}" -r 30 -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \
        "$OUT" 2>/dev/null & FF=$!
 pids+=($FF)
-sleep 1
+sleep 0.3
 rosbag play --clock -r "$RATE" "$BAG" "${bag_remaps[@]}"
 sleep 1; kill -INT "$FF" 2>/dev/null; wait "$FF" 2>/dev/null || true
 # ffmpeg normally reports its requested SIGINT as non-zero; the finalized MP4 is valid.

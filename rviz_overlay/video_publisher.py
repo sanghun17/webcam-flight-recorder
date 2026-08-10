@@ -65,6 +65,10 @@ class VideoPublisher:
     MAX_SKIP = 60
     # Producer lookahead: enough to absorb a hiccup without hoarding stale frames.
     QLEN = 8
+    # Never show a webcam frame that is visibly behind the simulated clock.
+    # At 30 fps one frame is the unavoidable quantization tolerance; anything
+    # older is skipped while the producer catches up/repositions.
+    MAX_PUBLISH_LAG = 1
     # Wall-clock poll rate for the consumer (see module docstring for why this
     # isn't a sim-time rospy.Timer). Comfortably oversamples fps*RATE for any
     # RATE up to ~6x so it never becomes the limiting factor itself; idle
@@ -171,7 +175,13 @@ class VideoPublisher:
         thread instead of just interleaving with it."""
         while True:
             with self._cv:
-                while not self._stop and self._jump_to is None and len(self._buf) >= self.QLEN:
+                # Before the first /clock, do not eagerly fill frames 0..QLEN.
+                # Most bags begin several webcam frames after video frame zero;
+                # publishing that stale startup buffer once before seeking makes
+                # the physical drone appear to jump underneath correctly timed
+                # RViz markers.  The first consumer tick supplies `_jump_to`.
+                while (not self._stop and self._jump_to is None and
+                       (self.cur < 0 or len(self._buf) >= self.QLEN)):
                     self._cv.wait(0.5)
                 if self._stop:
                     return
@@ -235,6 +245,12 @@ class VideoPublisher:
         if frame is None:
             return
         idx, data = frame
+        if target - idx > self.MAX_PUBLISH_LAG:
+            # `_jump_to` was already requested above.  Holding the most recent
+            # *correct* frame is less misleading than flashing an old one while
+            # decode catches up, and the producer normally closes this in one
+            # wall-clock iteration.
+            return
         stamp = rospy.Time.now()
         # Direct Image construction (no cv_bridge) avoids an extra frame copy per
         # publish; the producer already froze the bytes once via tobytes().
