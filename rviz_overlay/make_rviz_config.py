@@ -7,7 +7,7 @@ import os
 import yaml
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REC = os.path.join(os.path.dirname(HERE), "recordings", "safety_2026-06-30-14-17-18")
+REC = os.path.expanduser("~/drone-data/shared/results/webcam-recordings/safety_2026-06-30-14-17-18")
 BASE = os.path.join(REC, "rviz.rviz")
 OUT = os.path.join(HERE, "rviz_overlay.rviz")
 

@@ -11,7 +11,7 @@
 # 1920x1080), so the mp4 is <=1080p, not full 5MP. Projection stays exact.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REC="$(dirname "$HERE")/recordings/safety_2026-06-30-14-17-18"
+REC="/home/ml/drone-data/shared/results/webcam-recordings/safety_2026-06-30-14-17-18"
 BAG="$REC/safety_2026-06-30-14-17-18.bag"
 RVIZ="$HERE/rviz_overlay.rviz"
 RAW="$REC/overlay_rviz_raw.mkv"

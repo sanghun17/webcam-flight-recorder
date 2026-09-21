@@ -41,8 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import overlay_lib
 from overlay_lib import ODOM_TOPIC, load_extrinsics, load_odom, nearest
 
-DEFAULT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "recordings", "safety_2026-06-30-14-17-18")
+DEFAULT_DIR = os.path.expanduser("~/drone-data/shared/results/webcam-recordings/safety_2026-06-30-14-17-18")
 
 
 def pick_frames(ts, pos, fps, n, offset, start_epoch, zmin=0.3):

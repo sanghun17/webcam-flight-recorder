@@ -28,7 +28,7 @@ import numpy as np
 import rosbag
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-REC = os.path.join(HERE, "recordings", "safety_2026-06-30-14-17-18")
+REC = os.path.expanduser("~/drone-data/shared/results/webcam-recordings/safety_2026-06-30-14-17-18")
 BAG = os.path.join(REC, "safety_2026-06-30-14-17-18.bag")
 VIDEO = os.path.join(REC, "safety_2026-06-30-14-17-18.mp4")
 EXTR = os.path.join(HERE, "webcam_extrinsics.json")

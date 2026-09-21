@@ -37,7 +37,7 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROJ="$(dirname "$HERE")"
-REC_DIR="$(readlink -f "${1:-$PROJ/recordings/safety_2026-06-30-14-17-18}")"
+REC_DIR="$(readlink -f "${1:-/home/ml/drone-data/shared/results/webcam-recordings/safety_2026-06-30-14-17-18}")"
 export REC_DIR
 S="${SCRATCH:-/tmp}"
 OUT="${OVERLAY_OUT:-$REC_DIR/overlay_rviz.mp4}"

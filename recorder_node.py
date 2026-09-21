@@ -65,7 +65,7 @@ DEVICE     = os.environ.get("CAM_DEVICE", "/dev/video0")
 VIDEO_SIZE = os.environ.get("CAM_SIZE", "1920x1080")
 FRAMERATE  = os.environ.get("CAM_FPS", "30")
 INPUT_FMT  = os.environ.get("CAM_INPUT_FMT", "mjpeg")   # camera native pixel format
-OUTDIR     = os.environ.get("CAM_OUTDIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings"))
+OUTDIR     = os.environ.get("CAM_OUTDIR", os.path.expanduser("~/drone-data/shared/results/webcam-recordings"))
 PRESET     = os.environ.get("CAM_PRESET", "veryfast")   # x264 speed/size tradeoff
 CRF        = os.environ.get("CAM_CRF", "20")            # x264 quality: lower=sharper/bigger
 CODEC      = os.environ.get("CAM_CODEC", "h264").lower()  # h264 (mp4) | ffv1 (lossless, mkv)
