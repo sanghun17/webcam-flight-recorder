@@ -40,8 +40,8 @@ class RecorderMux(object):
         self.timeout = float(rospy.get_param("~timeout", 5.0))
         rospy.set_param(self.stem_param, "")  # start with no pinned name
         self._stem = ""                        # last session stem, for the stop reply
-        rospy.Service("~start", Trigger, self._start)
-        rospy.Service("~stop", Trigger, self._stop)
+        self.services = [rospy.Service("~start", Trigger, self._start),
+                         rospy.Service("~stop", Trigger, self._stop)]
         rospy.loginfo("[recorder_mux] fan-out ready: /recorder/start|stop -> %s",
                       ", ".join(self.cams))
 
@@ -94,12 +94,29 @@ class RecorderMux(object):
         return bool(results) and all(r is not None and r.success for r in results)
 
 
-def _master_watchdog():
-    """Re-register onto a restarted Jetson roscore (see recorder_node): rospy stays
-    bound to the dead master and never re-advertises /recorder/start, so the onboard
-    trigger silently finds nothing. Exit on a master-PID change; systemd relaunches."""
+def _registration_problem(master, node_name, node_uri, services):
+    """PID reuse and missing service registrations are independent failures."""
+    code, _, registered_uri = master.lookupNode(node_name)
+    if code != 1 or registered_uri != node_uri:
+        return "node %s: expected %s, got %s" % (node_name, node_uri, registered_uri)
+    for service in services:
+        code, _, registered_uri = master.lookupService(service.resolved_name)
+        if code != 1 or registered_uri != service.uri:
+            return "service %s: expected %s, got %s" % (
+                service.resolved_name, service.uri, registered_uri)
+    return None
+
+
+def _master_watchdog(services):
+    """Exit when registrations are lost; systemd re-advertises on relaunch.
+
+    Container roscore PIDs can repeat. Check ownership of both service endpoints
+    even if publishers have already restored this node's master registration.
+    A temporarily unreachable master is retried without claiming recovery.
+    """
     m = rospy.get_master()
     base = None
+    node_name, node_uri = rospy.get_name(), rospy.get_node_uri()
     while not rospy.is_shutdown():
         try:
             pid = m.getPid()[2]
@@ -110,6 +127,12 @@ def _master_watchdog():
                 rospy.signal_shutdown("ros master restarted")
                 time.sleep(2)
                 os._exit(1)
+            problem = _registration_problem(m, node_name, node_uri, services)
+            if problem:
+                rospy.logwarn("[recorder_mux] ROS registration lost (%s) — exiting to re-register", problem)
+                rospy.signal_shutdown("ROS registration lost")
+                time.sleep(2)
+                os._exit(1)
         except Exception:
             pass
         time.sleep(5)
@@ -117,8 +140,8 @@ def _master_watchdog():
 
 def main():
     rospy.init_node("recorder")   # -> services /recorder/start, /recorder/stop
-    RecorderMux()
-    threading.Thread(target=_master_watchdog, daemon=True).start()
+    mux = RecorderMux()
+    threading.Thread(target=_master_watchdog, args=(mux.services,), daemon=True).start()
     rospy.spin()
 
 

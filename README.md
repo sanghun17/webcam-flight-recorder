@@ -1,5 +1,32 @@
 # Webcam flight recorder
 
+## Recovery after a Jetson ROS restart
+
+`recorder_mux.py` monitors the master PID, its own XML-RPC node registration,
+and the registered ROSRPC addresses of both `/recorder/start` and
+`/recorder/stop`. A reused container PID or a lost service registration causes
+the mux to exit; the installed `webcam-recorder-mux.service` (`Restart=always`)
+relaunches it and advertises the services again. A temporarily unreachable master
+is retried. Recovery does not create recordings, replay an old start request, or
+recover video that was never recorded.
+
+The watchdog polls every five seconds and exits after a two-second shutdown
+grace period. With the default ten-second systemd restart delay, allow about
+17 seconds after the master becomes reachable for recovery. Run
+`bash preflight_check.sh` before flying to verify the mux and camera endpoints.
+
+Regression checks (private master at `127.0.0.1:11399`; no camera access):
+
+```bash
+source /opt/ros/noetic/setup.bash
+/usr/bin/python3 -s -m unittest -v test_recorder_mux
+WEBCAM_TEST_REAL_MASTER=1 /usr/bin/python3 -s -m unittest -v test_recorder_mux
+```
+
+The integration check replaces a real ROS master process while retaining its
+advertised PID, verifies mux restart and fake-camera start/stop, and separately
+removes a service while retaining the node registration.
+
 HTTP-triggered recorder for the ABKO APC930 webcam on the `ml` PC (192.168.50.12).
 The onboard flight PC sends start/stop over the network; this PC captures
 `/dev/video0` and saves an H.264 MP4 per flight into `recordings/`.
